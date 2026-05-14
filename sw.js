@@ -2,7 +2,7 @@
 // 另外的价钱 · Service Worker
 // 策略：核心壳层走 stale-while-revalidate，新版本自动接管
 
-const CACHE_VERSION = 'v1.2.0';
+const CACHE_VERSION = 'v1.3.0';
 const CACHE_NAME = `another-price-${CACHE_VERSION}`;
 
 // 离线壳层（注意 index.html 必须 precache，否则首屏白屏）
@@ -11,6 +11,7 @@ const SHELL_ASSETS = [
   '/index.html',
   '/styles.css',
   '/app.js',
+  '/vendor/qrcode.min.js',
   '/manifest.webmanifest',
   '/assets/logo.svg',
   '/assets/logo-192.png',

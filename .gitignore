@@ -32,6 +32,8 @@ align-*.png
 home-after-edit.png
 fix-profile-refresh.png
 smoke-*.png
+vercel-*.png
+bill-with-*.png
 
 # 日志
 *.log

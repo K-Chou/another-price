@@ -323,6 +323,36 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// 在 canvas 上画一个二维码（用 qrcode-generator 库，离线生成）
+// 返回 true 表示成功，false 表示库未加载或文本过长
+function drawQRCode(ctx, text, x, y, size) {
+  if (typeof qrcode !== 'function' || !text) return false;
+  try {
+    // typeNumber = 0 表示自动选最小够装下数据的版本；'M' 为中等纠错（兼容性最好）
+    const qr = qrcode(0, 'M');
+    qr.addData(String(text));
+    qr.make();
+    const count = qr.getModuleCount();
+    const cell = size / count;
+    ctx.save();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = '#1C1C1E';
+    for (let r = 0; r < count; r++) {
+      for (let c = 0; c < count; c++) {
+        if (qr.isDark(r, c)) {
+          // 多绘一点 0.5px 避免子像素缝隙
+          ctx.fillRect(x + c * cell, y + r * cell, cell + 0.6, cell + 0.6);
+        }
+      }
+    }
+    ctx.restore();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /**
  * 生成账单图片（参照付款页风格）。
  * 750@2x，纵向长图。
@@ -352,6 +382,10 @@ async function generateBillImage(bill, profile) {
   const bottomPad = 60;     // 底部留白（含底部强调标题 + 水印）
   const ctaH = 100;         // "长按..." 区域
 
+  // 推广卡：左侧引流二维码 + 右侧文案
+  const promoH = 200;       // 推广卡高
+  const promoQR = 140;      // 推广二维码尺寸（约付款码的 1/3，避免视觉竞争）
+
   const H =
     topPad +
     heroH +
@@ -360,6 +394,8 @@ async function generateBillImage(bill, profile) {
     gap +
     qrCardH +
     ctaH +
+    promoH +
+    gap +
     bottomPad;
 
   const canvas = document.createElement('canvas');
@@ -543,7 +579,55 @@ async function generateBillImage(bill, profile) {
   ctx.textBaseline = 'middle';
   ctx.fillText('长按二维码即可识别付款', W / 2, y + ctaH / 2);
 
-  // === 6. 底部署名（轻量） ===
+  // === 6. 推广卡：扫码访问应用首页 ===
+  y += ctaH;
+
+  // 浅色背景卡，与白色付款码卡区分（不喧宾夺主）
+  ctx.fillStyle = '#FFFFFF';
+  roundRect(ctx, padX, y, heroW, promoH, cardR);
+  ctx.fill();
+
+  // 左侧：推广二维码
+  const promoQrX = padX + 36;
+  const promoQrY = y + (promoH - promoQR) / 2;
+  const promoURL =
+    (typeof location !== 'undefined' && location.origin
+      ? location.origin + '/'
+      : 'https://another-price.vercel.app/');
+  const qrOk = drawQRCode(ctx, promoURL, promoQrX, promoQrY, promoQR);
+  if (qrOk) {
+    // 二维码四角加轻框，更清晰
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(promoQrX - 0.5, promoQrY - 0.5, promoQR + 1, promoQR + 1);
+  }
+
+  // 右侧：文案
+  const txtX = promoQrX + promoQR + 28;
+  const txtMaxW = heroW - (txtX - padX) - 36;
+
+  // 标题
+  ctx.font = '600 30px -apple-system, "PingFang SC", system-ui';
+  ctx.fillStyle = '#1C1C1E';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('也想给加班/份子钱明码标价？', txtX, y + 70);
+
+  // 副标题
+  ctx.font = '400 24px -apple-system, "PingFang SC", system-ui';
+  ctx.fillStyle = '#6B7280';
+  ctx.fillText('扫左侧二维码，免费使用', txtX, y + 108);
+
+  // 域名小字（强化可信度）
+  ctx.font = '500 22px -apple-system, "SF Pro Text", system-ui';
+  ctx.fillStyle = '#3B82F6';
+  // 把 URL 去掉协议头展示更清爽
+  const showHost = promoURL.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  // 用 wrapText 兜底，超长不撑破卡片
+  const hostLines = wrapText(ctx, showHost, txtMaxW);
+  ctx.fillText(hostLines[0] || showHost, txtX, y + 148);
+
+  // === 7. 底部署名（轻量） ===
   ctx.font = '400 20px -apple-system, "PingFang SC", system-ui';
   ctx.fillStyle = '#C7C7CC';
   ctx.textAlign = 'center';
