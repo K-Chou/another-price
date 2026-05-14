@@ -34,6 +34,8 @@ fix-profile-refresh.png
 smoke-*.png
 vercel-*.png
 bill-with-*.png
+live-bill-*.png
+home-kfc*.png
 
 # 日志
 *.log
