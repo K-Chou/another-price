@@ -793,6 +793,27 @@ function saveStore(store) {
 }
 
 let store = loadStore();
+
+// 一次性迁移：若老用户的价目表里没有 KFC 那条，软插到最前
+// 用一个 flag 防止用户主动删了之后又被自动加回（尊重用户选择）
+(function migrateAddKfcOnce() {
+  const FLAG = 'aprice_migrated_kfc_v1';
+  if (localStorage.getItem(FLAG)) return;
+  try {
+    const hasKfc = store.plans.some(
+      (p) => typeof p.label === 'string' && /KFC|疯狂星期四|v\s*我\s*50/i.test(p.label),
+    );
+    if (!hasKfc) {
+      store.plans = [
+        { id: uid(), icon: '🍔', label: 'KFC 疯狂星期四 v 我 50', hours: 1, amount: 50 },
+        ...store.plans,
+      ];
+      saveStore(store);
+    }
+    localStorage.setItem(FLAG, '1');
+  } catch (_) {}
+})();
+
 const persist = () => saveStore(store);
 
 // =====================================================================
