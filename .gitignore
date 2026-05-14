@@ -1,0 +1,45 @@
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor/
+
+# 依赖（如果以后引入 npm）
+node_modules/
+package-lock.json
+
+# 部署产物（dist 是从源码同步生成的，不必入库）
+dist/
+another-price-dist.zip
+*.zip
+
+# Vercel 本地配置
+.vercel/
+.env
+.env.local
+
+# 测试 / 截图（开发过程产物，不必入库）
+.playwright-mcp/
+audit-*.png
+h5opt-*.png
+img-*.png
+align-*.png
+home-after-edit.png
+fix-profile-refresh.png
+smoke-*.png
+
+# 日志
+*.log
+npm-debug.log*
+
+# Mac quarantine
+.com.apple.timemachine.donotpresent
+
+# 历史 demo（独立文件，不属于主项目）
+feishu-lemon.html
+

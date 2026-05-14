@@ -1,0 +1,22 @@
+# Cloudflare Pages 头部规则
+# 索引 HTML：不缓存（每次访问拉最新版）
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Service Worker：不缓存（关键，否则用户被旧 SW 锁死）
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Manifest：短缓存
+/manifest.webmanifest
+  Cache-Control: public, max-age=3600
+
+# 静态资源：长缓存（带哈希的话最佳）
+/assets/*
+  Cache-Control: public, max-age=2592000, immutable
+
+# 主 JS / CSS：让浏览器走 304（用 etag）
+/app.js
+  Cache-Control: public, max-age=300, must-revalidate
+/styles.css
+  Cache-Control: public, max-age=300, must-revalidate

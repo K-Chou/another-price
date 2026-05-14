@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="referrer" content="no-referrer" />
+    <title>另外的价钱</title>
+    <meta name="description" content="支持自定义主题的轻量级收款工具：加班、跑腿、份子钱、AA…一张链接，扫码付清。" />
+    <meta name="theme-color" content="#D6F141" />
+
+    <link rel="icon" type="image/svg+xml" href="./assets/logo.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png" />
+
+    <!-- Open Graph：被微信/X/Telegram/Slack 等抓取做卡片预览 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="另外的价钱" />
+    <meta property="og:title" content="另外的价钱" />
+    <meta property="og:description" content="加班、跑腿、份子钱…该收的钱，一笔都不能少。" />
+    <meta property="og:image" content="/assets/logo-1024.jpg" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:image:alt" content="另外的价钱 - 轻量收款工具" />
+    <meta property="og:locale" content="zh_CN" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="另外的价钱" />
+    <meta name="twitter:description" content="加班、跑腿、份子钱…该收的钱，一笔都不能少。" />
+    <meta name="twitter:image" content="/assets/logo-1024.jpg" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="另外的价钱" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="另外的价钱" />
+
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="phone-shell">
+      <div id="app"></div>
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <div id="modal-root"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

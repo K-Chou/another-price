@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>æ„÷± · €</title>
+
+  <defs>
+    <linearGradient id="coin" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFE368"/>
+      <stop offset="55%" stop-color="#F5B71A"/>
+      <stop offset="100%" stop-color="#C98509"/>
+    </linearGradient>
+    <radialGradient id="coinHi" cx="0.35" cy="0.35" r="0.4">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- •à¬ÄÒ¹WiOS þÒÔ H 22.37%	 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="#D6F141"/>
+
+  <!-- ñÝšÏ¹ + 4qK™„ ¥ -->
+  <g transform="translate(0, 32)">
+    <!-- 4qB -->
+    <text x="512" y="640"
+          font-family="-apple-system, 'PingFang SC', 'Hiragino Sans GB', system-ui, sans-serif"
+          font-size="620" font-weight="900"
+          text-anchor="middle"
+          fill="none" stroke="#1A2A66" stroke-width="56"
+          stroke-linejoin="round" stroke-linecap="round"
+          paint-order="stroke">¥</text>
+    <!-- Wb -->
+    <text x="512" y="640"
+          font-family="-apple-system, 'PingFang SC', 'Hiragino Sans GB', system-ui, sans-serif"
+          font-size="620" font-weight="900"
+          text-anchor="middle"
+          fill="#FFFFFF">¥</text>
+  </g>
+
+  <!-- óÑ -->
+  <g transform="translate(720, 700)">
+    <circle r="148" fill="#1A2A66"/>
+    <circle r="132" fill="url(#coin)"/>
+    <circle r="132" fill="url(#coinHi)"/>
+    <text x="0" y="40"
+          font-family="-apple-system, 'PingFang SC', system-ui, sans-serif"
+          font-size="160" font-weight="800"
+          text-anchor="middle" fill="#7A4A04">¥</text>
+  </g>
+</svg>
