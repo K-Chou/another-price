@@ -397,15 +397,23 @@ button {
 .profile-hero {
   display: grid;
   place-items: center;
-  padding: 8px 0 24px;
+  padding: 2px 0 16px;
   text-align: center;
+}
+
+.settings-profile-hero {
+  padding: 0 0 4px;
+}
+
+.settings-profile-hero + .section-header {
+  padding-top: 10px;
 }
 
 .avatar-frame {
   position: relative;
   width: 96px;
   height: 96px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   border-radius: 50%;
   background: linear-gradient(135deg, #5ac8fa 0%, #007aff 100%);
   overflow: hidden;
@@ -417,6 +425,7 @@ button {
 .avatar-frame.lg {
   width: 80px;
   height: 80px;
+  margin-bottom: 8px;
 }
 
 .avatar-frame.md {
@@ -429,6 +438,15 @@ button {
   width: 36px;
   height: 36px;
   margin-bottom: 0;
+}
+
+.avatar-frame.is-clickable {
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.avatar-frame.is-clickable:active {
+  transform: scale(0.96);
 }
 
 .avatar-frame img {
@@ -1002,7 +1020,8 @@ button {
 }
 
 .field.inline input,
-.field.inline textarea {
+.field.inline textarea,
+.field.inline select {
   text-align: right;
   padding: 4px 0;
 }

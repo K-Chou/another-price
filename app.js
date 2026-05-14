@@ -353,8 +353,17 @@ function drawQRCode(ctx, text, x, y, size) {
   }
 }
 
+// 应用首页地址：正式域名走根路径；IP 临时部署默认走 /another-price/
+function appHomeURL() {
+  if (typeof location === 'undefined' || !location.origin) return 'https://another-price.vercel.app/';
+  const isIPHost = /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/.test(location.host);
+  const isSubPathDeploy = location.pathname.startsWith('/another-price');
+  if (isIPHost || isSubPathDeploy) return `${location.origin}/another-price/`;
+  return `${location.origin}/`;
+}
+
 /**
- * 生成账单图片（参照付款页风格）。
+ * 生成账单图片：首页名片风格。
  * 750@2x，纵向长图。
  */
 async function generateBillImage(bill, profile) {
@@ -364,38 +373,36 @@ async function generateBillImage(bill, profile) {
   const items = bill.items || [];
 
   const qrImg = await loadImage(profile.wechatQR);
+  const avatarImg = await loadImage(profile.avatar);
+  // Canvas 对部分 SVG 渲染兼容性不稳定，使用 PNG 确保账单图里 Logo 不丢失。
+  const logoImg = await loadImage('./assets/logo-192.png');
 
-  // === 布局常量 ===
-  const padX = 36;          // 整体左右内边距
-  const cardR = 28;         // 卡片圆角
-  const heroH = 360;        // Hero 高
-  const itemRowH = 100;     // 每条明细高
-  const itemsCardPad = 32;  // 明细卡内边距
-  const qrSize = 480;       // 二维码尺寸（必须大才清晰）
-  const qrCardPad = 40;     // 二维码卡内边距
-  const gap = 28;           // 卡片之间间距
-
-  const itemsCardH = items.length * itemRowH + itemsCardPad * 2;
-  const qrCardH = qrSize + qrCardPad * 2;
-
-  const topPad = 48;        // 顶部留白
-  const bottomPad = 60;     // 底部留白（含底部强调标题 + 水印）
-  const ctaH = 100;         // "长按..." 区域
-
-  // 推广卡：左侧引流二维码 + 右侧文案
-  const promoH = 200;       // 推广卡高
-  const promoQR = 140;      // 推广二维码尺寸（约付款码的 1/3，避免视觉竞争）
+  const padX = 62;
+  const cardR = 24;
+  const topPad = 44;
+  const brandH = 92;
+  const profileH = 210;
+  const sectionH = 48;
+  const rowH = 92;
+  const listPadY = 20;
+  const listH = items.length * rowH + listPadY * 2;
+  const payQR = 360;
+  const payBlockH = payQR + 76;
+  const promoQR = 112;
+  const promoH = 176;
+  const bottomPad = 56;
+  const cardW = W - padX * 2;
 
   const H =
     topPad +
-    heroH +
-    gap +
-    itemsCardH +
-    gap +
-    qrCardH +
-    ctaH +
+    brandH +
+    profileH +
+    sectionH +
+    listH +
+    34 +
+    payBlockH +
+    30 +
     promoH +
-    gap +
     bottomPad;
 
   const canvas = document.createElement('canvas');
@@ -406,228 +413,184 @@ async function generateBillImage(bill, profile) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  // === 1. 浅灰背景（应用 group bg） ===
-  ctx.fillStyle = '#F2F2F7';
+  // === 1. 背景 ===
+  ctx.fillStyle = '#F7F7FB';
   ctx.fillRect(0, 0, W, H);
 
-  // === 2. Hero ===
-  const heroX = padX;
-  const heroY = topPad;
-  const heroW = W - padX * 2;
-
-  // Hero 渐变底（深蓝→深紫，仿付款页 bill-hero）
-  const heroGrad = ctx.createLinearGradient(heroX, heroY, heroX + heroW, heroY + heroH);
-  heroGrad.addColorStop(0, '#1f3a5e');
-  heroGrad.addColorStop(0.5, '#2d4673');
-  heroGrad.addColorStop(1, '#3a4d80');
-  ctx.fillStyle = heroGrad;
-  roundRect(ctx, heroX, heroY, heroW, heroH, cardR);
-  ctx.fill();
-
-  // 右上角柠檬绿光晕（用径向渐变 + clip 限制在卡片内）
-  ctx.save();
-  roundRect(ctx, heroX, heroY, heroW, heroH, cardR);
-  ctx.clip();
-  const glowR = 280;
-  const glowCx = heroX + heroW - 60;
-  const glowCy = heroY + 40;
-  const glow = ctx.createRadialGradient(glowCx, glowCy, 0, glowCx, glowCy, glowR);
-  glow.addColorStop(0, 'rgba(214, 241, 65, 0.75)');
-  glow.addColorStop(0.55, 'rgba(214, 241, 65, 0.18)');
-  glow.addColorStop(1, 'rgba(214, 241, 65, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(heroX, heroY, heroW, heroH);
-  ctx.restore();
-
-  // 主题徽章 - 黑色半透药丸
-  const badgePadX = 22;
-  const badgePadY = 12;
-  ctx.font = '500 28px -apple-system, "PingFang SC", system-ui';
-  const badgeText = `${theme.emoji}  ${theme.title}`;
-  const badgeTextW = ctx.measureText(badgeText).width;
-  const badgeW = badgeTextW + badgePadX * 2;
-  const badgeH = 56;
-  const badgeX = heroX + 36;
-  const badgeY = heroY + 36;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, badgeH / 2);
-  ctx.fill();
-  ctx.fillStyle = '#FFFFFF';
-  ctx.textBaseline = 'middle';
+  // === 2. 顶部品牌区 ===
+  let y = topPad;
+  const logoSize = 70;
+  if (logoImg) {
+    ctx.save();
+    roundRect(ctx, padX, y + 8, logoSize, logoSize, 16);
+    ctx.clip();
+    ctx.drawImage(logoImg, padX, y + 8, logoSize, logoSize);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#D6F141';
+    roundRect(ctx, padX, y + 8, logoSize, logoSize, 16);
+    ctx.fill();
+  }
   ctx.textAlign = 'left';
-  ctx.fillText(badgeText, badgeX + badgePadX, badgeY + badgeH / 2 + 1);
-
-  // "应付" 标签
-  ctx.font = '400 26px -apple-system, "PingFang SC", system-ui';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-  ctx.textBaseline = 'top';
-  ctx.fillText('应付', heroX + 36, heroY + 130);
-
-  // 金额（柠檬绿）
-  ctx.fillStyle = '#D6F141';
   ctx.textBaseline = 'alphabetic';
-  ctx.font = '700 56px -apple-system, "SF Pro Display", system-ui';
-  const amountY = heroY + 240;
-  const xMarkW = ctx.measureText('¥').width;
-  ctx.fillText('¥', heroX + 36, amountY);
-  ctx.font = '700 110px -apple-system, "SF Pro Display", system-ui';
-  ctx.fillText(formatMoney(bill.total), heroX + 36 + xMarkW + 6, amountY);
+  ctx.fillStyle = '#111111';
+  ctx.font = '800 40px -apple-system, "PingFang SC", system-ui';
+  ctx.fillText('另外的价钱', padX + logoSize + 24, y + 42);
+  ctx.fillStyle = '#8E8E93';
+  ctx.font = '400 22px -apple-system, "PingFang SC", system-ui';
+  const tagline = '加班、跑腿、份子钱…该收的钱，一笔都不能少。';
+  wrapText(ctx, tagline, W - padX * 2 - logoSize - 24).slice(0, 2).forEach((ln, i) => {
+    ctx.fillText(ln, padX + logoSize + 24, y + 76 + i * 28);
+  });
+  y += brandH;
 
-  // 副标题（theme.desc 或 bill.note）
+  // === 3. 个人名片区 ===
+  const avatarR = 58;
+  drawAvatar(ctx, avatarImg, profile.nickname || '我', W / 2, y + 70, avatarR);
+  ctx.fillStyle = '#111111';
+  ctx.font = '800 34px -apple-system, "PingFang SC", system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(profile.nickname || '我', W / 2, y + 152);
   const subTitle = bill.note || theme.desc || '';
   if (subTitle) {
-    ctx.font = '400 24px -apple-system, "PingFang SC", system-ui';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
-    ctx.textBaseline = 'top';
-    const subLines = wrapText(ctx, subTitle, heroW - 72);
-    subLines.slice(0, 2).forEach((ln, i) => {
-      ctx.fillText(ln, heroX + 36, heroY + heroH - 80 + i * 32);
+    ctx.fillStyle = '#8E8E93';
+    ctx.font = '400 22px -apple-system, "PingFang SC", system-ui';
+    wrapText(ctx, subTitle, W - padX * 2).slice(0, 1).forEach((ln) => {
+      ctx.fillText(ln, W / 2, y + 188);
     });
   }
+  y += profileH;
 
-  // === 3. 明细卡 ===
-  let y = heroY + heroH + gap;
+  // === 4. 明细列表 ===
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#8E8E93';
+  ctx.font = '400 24px -apple-system, "PingFang SC", system-ui';
+  ctx.fillText('我的价目', padX, y + 30);
+  y += sectionH;
 
   ctx.fillStyle = '#FFFFFF';
-  roundRect(ctx, padX, y, heroW, itemsCardH, cardR);
+  roundRect(ctx, padX, y, cardW, listH, cardR);
   ctx.fill();
 
   items.forEach((it, idx) => {
-    const ty = y + itemsCardPad + idx * itemRowH;
+    const ty = y + listPadY + idx * rowH;
 
-    // 分隔线
     if (idx > 0) {
       ctx.strokeStyle = 'rgba(60, 60, 67, 0.10)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(padX + 96, ty - 4);
-      ctx.lineTo(padX + heroW - 32, ty - 4);
+      ctx.moveTo(padX + 96, ty - 2);
+      ctx.lineTo(padX + cardW - 32, ty - 2);
       ctx.stroke();
     }
 
-    // emoji 圆形底
-    const eR = 30;
+    const eR = 26;
     const eCx = padX + 32 + eR;
-    const eCy = ty + itemRowH / 2 - 10;
-    ctx.fillStyle = '#F2F2F7';
+    const eCy = ty + rowH / 2;
+    ctx.fillStyle = '#F2F7FF';
     ctx.beginPath();
     ctx.arc(eCx, eCy, eR + 4, 0, Math.PI * 2);
     ctx.fill();
-    ctx.font = '34px -apple-system, system-ui';
+    ctx.font = '30px -apple-system, system-ui';
     ctx.fillStyle = '#000';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     ctx.fillText(it.icon || '💼', eCx, eCy + 2);
 
-    // 标题
-    ctx.font = '500 30px -apple-system, "PingFang SC", system-ui';
+    ctx.font = '600 28px -apple-system, "PingFang SC", system-ui';
     ctx.fillStyle = '#1C1C1E';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(it.label, padX + 96, ty + itemRowH / 2 - 6);
+    const titleLines = wrapText(ctx, it.label, cardW - 270);
+    ctx.fillText(titleLines[0] || it.label, padX + 96, ty + 38);
 
-    // meta
-    ctx.font = '400 22px -apple-system, "PingFang SC", system-ui';
+    ctx.font = '400 20px -apple-system, "PingFang SC", system-ui';
     ctx.fillStyle = '#8E8E93';
     ctx.fillText(
-      `${it.hours}h × ¥${formatMoney(it.amount)} × ${it.qty}`,
+      billItemMetaText(it),
       padX + 96,
-      ty + itemRowH / 2 + 28,
+      ty + 68,
     );
 
-    // 子金额
-    ctx.font = '600 32px -apple-system, "SF Pro Display", system-ui';
+    ctx.font = '700 28px -apple-system, "SF Pro Display", system-ui';
     ctx.fillStyle = '#1C1C1E';
     ctx.textAlign = 'right';
     ctx.fillText(
       `¥${formatMoney(it.amount * it.qty)}`,
-      padX + heroW - 32,
-      ty + itemRowH / 2 + 8,
+      padX + cardW - 30,
+      ty + 48,
     );
   });
 
-  // === 4. 二维码大白卡 ===
-  y += itemsCardH + gap;
-  ctx.textAlign = 'left';
+  y += listH + 34;
 
-  ctx.fillStyle = '#FFFFFF';
-  roundRect(ctx, padX, y, heroW, qrCardH, cardR);
-  ctx.fill();
-
-  const qrX = padX + (heroW - qrSize) / 2;
-  const qrY = y + qrCardPad;
+  // === 5. 付款二维码 ===
+  const qrX = (W - payQR) / 2;
+  const qrY = y;
 
   if (qrImg) {
-    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+    ctx.fillStyle = '#FFFFFF';
+    roundRect(ctx, qrX - 26, qrY - 26, payQR + 52, payQR + 52, 24);
+    ctx.fill();
+    ctx.drawImage(qrImg, qrX, qrY, payQR, payQR);
   } else {
+    ctx.fillStyle = '#FFFFFF';
+    roundRect(ctx, qrX - 26, qrY - 26, payQR + 52, payQR + 52, 24);
+    ctx.fill();
     ctx.fillStyle = '#F2F2F7';
-    ctx.fillRect(qrX, qrY, qrSize, qrSize);
+    ctx.fillRect(qrX, qrY, payQR, payQR);
     ctx.fillStyle = '#8E8E93';
     ctx.font = '400 24px -apple-system, "PingFang SC", system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('（未上传收款码）', qrX + qrSize / 2, qrY + qrSize / 2);
-    ctx.textAlign = 'left';
+    ctx.fillText('（未上传收款码）', qrX + payQR / 2, qrY + payQR / 2);
   }
 
-  // === 5. CTA "长按二维码即可识别付款" ===
-  y += qrCardH;
-
-  ctx.font = '600 32px -apple-system, "PingFang SC", system-ui';
+  ctx.font = '600 26px -apple-system, "PingFang SC", system-ui';
   ctx.fillStyle = '#1C1C1E';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('长按二维码即可识别付款', W / 2, y + ctaH / 2);
+  ctx.fillText('长按二维码即可识别付款', W / 2, qrY + payQR + 56);
 
-  // === 6. 推广卡：扫码访问应用首页 ===
-  y += ctaH;
+  y += payBlockH + 30;
 
-  // 浅色背景卡，与白色付款码卡区分（不喧宾夺主）
+  // === 6. 应用首页引流二维码 ===
   ctx.fillStyle = '#FFFFFF';
-  roundRect(ctx, padX, y, heroW, promoH, cardR);
+  roundRect(ctx, padX, y, cardW, promoH, cardR);
   ctx.fill();
 
-  // 左侧：推广二维码
-  const promoQrX = padX + 36;
+  const promoQrX = padX + 34;
   const promoQrY = y + (promoH - promoQR) / 2;
-  const promoURL =
-    (typeof location !== 'undefined' && location.origin
-      ? location.origin + '/'
-      : 'https://another-price.vercel.app/');
+  const promoURL = appHomeURL();
   const qrOk = drawQRCode(ctx, promoURL, promoQrX, promoQrY, promoQR);
   if (qrOk) {
-    // 二维码四角加轻框，更清晰
     ctx.strokeStyle = 'rgba(0,0,0,0.06)';
     ctx.lineWidth = 1;
     ctx.strokeRect(promoQrX - 0.5, promoQrY - 0.5, promoQR + 1, promoQR + 1);
   }
 
-  // 右侧：文案
-  const txtX = promoQrX + promoQR + 28;
-  const txtMaxW = heroW - (txtX - padX) - 36;
+  const txtX = promoQrX + promoQR + 30;
+  const txtMaxW = cardW - (txtX - padX) - 36;
 
-  // 标题
-  ctx.font = '600 30px -apple-system, "PingFang SC", system-ui';
+  ctx.font = '700 26px -apple-system, "PingFang SC", system-ui';
   ctx.fillStyle = '#1C1C1E';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText('也想给加班/份子钱明码标价？', txtX, y + 70);
+  ctx.fillText('扫码制作你的收款账单', txtX, y + 62);
 
-  // 副标题
-  ctx.font = '400 24px -apple-system, "PingFang SC", system-ui';
+  ctx.font = '400 21px -apple-system, "PingFang SC", system-ui';
   ctx.fillStyle = '#6B7280';
-  ctx.fillText('扫左侧二维码，免费使用', txtX, y + 108);
+  ctx.fillText('打开「另外的价钱」首页', txtX, y + 98);
 
-  // 域名小字（强化可信度）
-  ctx.font = '500 22px -apple-system, "SF Pro Text", system-ui';
+  ctx.font = '500 19px -apple-system, "SF Pro Text", system-ui';
   ctx.fillStyle = '#3B82F6';
-  // 把 URL 去掉协议头展示更清爽
   const showHost = promoURL.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  // 用 wrapText 兜底，超长不撑破卡片
   const hostLines = wrapText(ctx, showHost, txtMaxW);
-  ctx.fillText(hostLines[0] || showHost, txtX, y + 148);
+  ctx.fillText(hostLines[0] || showHost, txtX, y + 132);
 
-  // === 7. 底部署名（轻量） ===
+  // === 7. 底部署名 ===
   ctx.font = '400 20px -apple-system, "PingFang SC", system-ui';
   ctx.fillStyle = '#C7C7CC';
   ctx.textAlign = 'center';
@@ -697,14 +660,16 @@ const DEFAULT_PROFILE = {
   nickname: '',
   avatar: '',
   bio: '',
-  hourlyRate: 0,
+  hourlyRate: 50,
   wechatQR: '',
   alipayQR: '',
 };
 
 const DEFAULT_PLANS = [
-  { id: uid(), icon: '🍔', label: 'KFC 疯狂星期四 v 我 50', hours: 1, amount: 50 },
-  { id: uid(), icon: '💼', label: '工作日加班 1 小时', hours: 1, amount: 50 },
+  { id: 'builtin-kfc-v50', icon: '🍔', label: 'v我50', hours: 1, amount: 50, rateBased: true, unit: '份' },
+  { id: 'builtin-weekday-ot-1h', icon: '💼', label: '工作日加班 1 小时', hours: 1, amount: 50, rateBased: true },
+  { id: 'builtin-weekend-ot-1h', icon: '🌙', label: '周末加班 1 小时', hours: 1, amount: 50, rateBased: true },
+  { id: 'builtin-holiday-ot-1h', icon: '🚨', label: '节假日加班 1 小时', hours: 1, amount: 50, rateBased: true },
 ];
 
 const ICON_CHOICES = [
@@ -723,6 +688,7 @@ const DEFAULT_THEME = {
 
 const THEME_PRESETS = [
   { id: 'overtime', emoji: '💼', title: '加班付费', desc: '让每一份加班，都被认真对待' },
+  { id: 'crazy-thursday', emoji: '🍗', title: '疯狂星期四', desc: 'V 我 50，今晚快乐准时到账' },
   { id: 'errand',   emoji: '🛵', title: '帮我跑腿', desc: '感谢你愿意帮我跑这一趟' },
   { id: 'gift',     emoji: '🎁', title: '份子钱',   desc: '祝幸福美满 · 礼到心意到' },
   { id: 'aa',       emoji: '🍽️', title: 'AA 收款',  desc: '聚会愉快，账目清晰' },
@@ -734,13 +700,6 @@ const THEME_PRESETS = [
   { id: 'shop',     emoji: '🛍️', title: '代购清单', desc: '已经帮你拿到啦' },
   { id: 'photo',    emoji: '📷', title: '拍摄费用', desc: '感谢这次合作' },
   { id: 'custom',   emoji: '💰', title: '自定义',   desc: '' },
-];
-
-const THEME_EMOJI_CHOICES = [
-  '💼', '🛵', '🎁', '🍽️', '🏠', '📚',
-  '🎨', '🔧', '💪', '🛍️', '📷', '💰',
-  '🚗', '✈️', '🏥', '🐱', '🎂', '☕',
-  '🎵', '🍻', '💍', '🎓', '🧧', '🌹',
 ];
 
 function loadStore() {
@@ -805,7 +764,7 @@ let store = loadStore();
     );
     if (!hasKfc) {
       store.plans = [
-        { id: uid(), icon: '🍔', label: 'KFC 疯狂星期四 v 我 50', hours: 1, amount: 50 },
+        { id: uid(), icon: '🍔', label: 'v我50', hours: 1, amount: 50 },
         ...store.plans,
       ];
       saveStore(store);
@@ -815,6 +774,36 @@ let store = loadStore();
 })();
 
 const persist = () => saveStore(store);
+
+function currentHourlyRate() {
+  const rate = parseFloat(store.profile.hourlyRate);
+  return rate > 0 ? rate : DEFAULT_PROFILE.hourlyRate;
+}
+
+function builtInPlans() {
+  const rate = currentHourlyRate();
+  return DEFAULT_PLANS.map((p) => ({
+    ...p,
+    amount: p.rateBased ? parseFloat((rate * p.hours).toFixed(2)) : p.amount,
+  }));
+}
+
+function planDurationText(plan) {
+  return plan.unit ? `${plan.hours}${plan.unit}` : `${plan.hours} 小时`;
+}
+
+function planMetaText(plan) {
+  return plan.unit ? `${planDurationText(plan)} · ¥${formatMoney(plan.amount)}` : `${plan.hours}h · ¥${formatMoney(plan.amount)}/次`;
+}
+
+function planUnitPriceText(plan) {
+  return plan.unit ? `${formatMoney(plan.amount)}/${plan.unit}` : `${formatMoney(plan.amount / Math.max(plan.hours, 0.001))}/小时`;
+}
+
+function billItemMetaText(item) {
+  const unitText = item.unit ? `${item.hours}${item.unit}` : `${item.hours}h`;
+  return `${unitText} × ¥${formatMoney(item.amount)} × ${item.qty}`;
+}
 
 // =====================================================================
 // 自营推广位配置
@@ -1122,12 +1111,12 @@ function NavBar({ title, back = true, right = '' } = {}) {
   `;
 }
 
-function AvatarHTML(p, size) {
+function AvatarHTML(p, size, extraClass = '', attrs = '') {
   const sizeClass = size === 80 ? 'lg' : size === 56 ? 'md' : size === 36 ? 'sm' : '';
   const content = p.avatar
     ? `<img src="${esc(p.avatar)}" alt="头像"/>`
     : `<div class="avatar-placeholder">${esc((p.nickname || '我').trim().charAt(0).toUpperCase())}</div>`;
-  return `<div class="avatar-frame ${sizeClass}">${content}</div>`;
+  return `<div class="avatar-frame ${sizeClass} ${extraClass}" ${attrs}>${content}</div>`;
 }
 
 function ChevronRight() {
@@ -1151,7 +1140,8 @@ function bindBackBtn(root) {
 // =====================================================================
 
 function renderHome(el) {
-  const { profile, plans } = store;
+  const { profile } = store;
+  const plans = builtInPlans();
   const needSetup = !profile.wechatQR && !profile.nickname;
 
   el.innerHTML = `
@@ -1193,37 +1183,28 @@ function renderHome(el) {
         : ''
       }
 
-      <div class="section-header">
-        <span>我的价目</span>
-        <a class="link" data-go="/pricing">管理</a>
-      </div>
+      <div class="section-header"><span>内置价目</span></div>
       <div class="group">
         ${
           plans.length === 0
-            ? `<div class="empty"><div class="icon">📋</div>暂无价目，点击右侧「管理」添加</div>`
-            : plans.slice(0, 4)
+            ? `<div class="empty"><div class="icon">📋</div>暂无内置价目，创建账单时可添加临时项目</div>`
+            : plans
                 .map(
                   (p) => `
             <div class="plan-row">
               <div class="plan-icon-circle">${esc(p.icon || '💼')}</div>
               <div class="plan-body">
                 <div class="name">${esc(p.label)}</div>
-                <div class="meta">${p.hours} 小时</div>
+                  <div class="meta">${planDurationText(p)}</div>
               </div>
               <div class="plan-price">
                 <div class="amount tabular">¥${formatMoney(p.amount)}</div>
-                <div class="unit">${formatMoney(p.amount / Math.max(p.hours, 0.001))}/小时</div>
+                <div class="unit">${planUnitPriceText(p)}</div>
               </div>
             </div>
           `,
                 )
-                .join('') +
-                (plans.length > 4
-                  ? `<button class="row link-row" data-go="/pricing">
-                      <div class="middle"><div class="title">查看全部 ${plans.length} 条</div></div>
-                      <div class="trailing">${ChevronRight()}</div>
-                    </button>`
-                  : '')
+                .join('')
         }
       </div>
 
@@ -1253,24 +1234,15 @@ function renderHome(el) {
           <div class="trailing">${ChevronRight()}</div>
         </button>
       </div>
-
-      <div class="section-header"><span>为你推荐</span></div>
-      ${PromoCard()}
     </div>
   `;
 
   $$('[data-go]', el).forEach((b) => {
     b.addEventListener('click', () => {
       haptic('light');
-      if (b.dataset.go === '/create' && store.plans.length === 0) {
-        showToast('请先添加至少一条价目');
-        navigate('/pricing');
-        return;
-      }
       navigate(b.dataset.go);
     });
   });
-  bindPromoHandlers(el);
 }
 
 // =====================================================================
@@ -1288,8 +1260,8 @@ function renderSettings(el) {
     </div>
 
     <div class="screen-content">
-      <div class="profile-hero" style="padding-top:0">
-        ${AvatarHTML(p, 80)}
+      <div class="profile-hero settings-profile-hero">
+        ${AvatarHTML(p, 80, 'is-clickable', 'id="avatar-upload-trigger" role="button" tabindex="0" aria-label="更换头像"')}
         <button class="btn btn-ghost btn-sm" id="btn-upload-avatar" style="margin-top:8px">更换头像</button>
         <input type="file" id="file-avatar" accept="image/*" hidden/>
       </div>
@@ -1306,7 +1278,7 @@ function renderSettings(el) {
         </div>
         <div class="field inline">
           <label>时薪</label>
-          <input id="inp-rate" type="number" min="0" step="0.01" placeholder="可选" value="${p.hourlyRate || ''}"/>
+          <input id="inp-rate" type="number" min="0" step="0.01" placeholder="默认 50" value="${p.hourlyRate || DEFAULT_PROFILE.hourlyRate}"/>
         </div>
         <div class="field" style="padding-top:0">
           <div class="helper">设置后可在"创建账单"时按"小时 × 时薪"快速添加临时项。</div>
@@ -1350,12 +1322,20 @@ function renderSettings(el) {
     const r = $('#inp-rate', el);
     if (n) store.profile.nickname = n.value.trim() || store.profile.nickname || '';
     if (b) store.profile.bio = b.value.trim();
-    if (r) store.profile.hourlyRate = parseFloat(r.value) || 0;
+    if (r) store.profile.hourlyRate = parseFloat(r.value) || DEFAULT_PROFILE.hourlyRate;
   };
 
-  $('#btn-upload-avatar', el).addEventListener('click', () => {
+  const openAvatarPicker = () => {
     haptic('light');
     $('#file-avatar', el).click();
+  };
+  $('#btn-upload-avatar', el).addEventListener('click', openAvatarPicker);
+  $('#avatar-upload-trigger', el).addEventListener('click', openAvatarPicker);
+  $('#avatar-upload-trigger', el).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openAvatarPicker();
+    }
   });
   $('#file-avatar', el).addEventListener('change', async (e) => {
     const f = e.target.files[0];
@@ -1406,7 +1386,7 @@ function renderSettings(el) {
   $('#btn-save-profile', el).addEventListener('click', () => {
     store.profile.nickname = $('#inp-nickname', el).value.trim() || '我';
     store.profile.bio = $('#inp-bio', el).value.trim();
-    store.profile.hourlyRate = parseFloat($('#inp-rate', el).value) || 0;
+    store.profile.hourlyRate = parseFloat($('#inp-rate', el).value) || DEFAULT_PROFILE.hourlyRate;
     persist();
     haptic('medium');
     showToast('已保存');
@@ -1611,7 +1591,7 @@ function getDraft() {
 
 function renderCreate(el) {
   const d = getDraft();
-  const plans = store.plans;
+  const plans = builtInPlans();
   const total =
     plans.reduce((s, p) => s + (d.items[p.id] || 0) * p.amount, 0) +
     d.customItems.reduce((s, c) => s + c.qty * c.amount, 0);
@@ -1623,7 +1603,7 @@ function renderCreate(el) {
       <div class="large-title-subtitle">勾选项目并调整数量，自动汇总。</div>
     </div>
 
-    <div class="screen-content" style="padding-bottom:120px">
+    <div class="screen-content" style="padding-bottom:32px">
       <div class="section-header"><span>主题</span></div>
       <button class="row theme-row" id="btn-theme">
         <div class="leading"><div class="theme-emoji">${esc(d.theme.emoji || '💰')}</div></div>
@@ -1634,11 +1614,11 @@ function renderCreate(el) {
         <div class="trailing">${ChevronRight()}</div>
       </button>
 
-      <div class="section-header"><span>我的价目</span></div>
+      <div class="section-header"><span>内置价目</span></div>
       <div class="group">
         ${
           plans.length === 0
-            ? `<div class="empty"><div class="icon">📋</div>请先到价目表添加</div>`
+            ? `<div class="empty"><div class="icon">📋</div>暂无内置价目，可点「+ 自定义」添加临时项目</div>`
             : plans
                 .map((p) => {
                   const qty = d.items[p.id] || 0;
@@ -1647,7 +1627,7 @@ function renderCreate(el) {
                 <div class="plan-icon-circle">${esc(p.icon || '💼')}</div>
                 <div class="plan-body">
                   <div class="name">${esc(p.label)}</div>
-                  <div class="meta">${p.hours}h · ¥${formatMoney(p.amount)}/次</div>
+                  <div class="meta">${planMetaText(p)}</div>
                 </div>
                 ${
                   qty > 0
@@ -1683,7 +1663,7 @@ function renderCreate(el) {
               <div class="plan-icon-circle">🧮</div>
               <div class="plan-body">
                 <div class="name">${esc(c.label)}</div>
-                <div class="meta">${c.hours}h × ¥${formatMoney(c.amount)}</div>
+                <div class="meta">${billItemMetaText({ ...c, qty: 1 })}</div>
               </div>
               <div class="stepper">
                 <button data-act="cdec" data-id="${c.id}">−</button>
@@ -1811,15 +1791,6 @@ function openThemePicker(screenEl) {
 
         <div class="section-header"><span>自定义</span></div>
         <div class="field-group">
-          <div class="field">
-            <label>表情图标</label>
-            <div class="icon-grid" id="th-emoji-grid" style="padding:8px 0 0">
-              ${THEME_EMOJI_CHOICES.map(
-                (e) =>
-                  `<button data-emoji="${e}" class="${working.emoji === e ? 'is-active' : ''}">${e}</button>`,
-              ).join('')}
-            </div>
-          </div>
           <div class="field inline">
             <label>主题标题</label>
             <input id="th-title" type="text" maxlength="16" value="${esc(working.title)}" placeholder="例如：周年纪念"/>
@@ -1839,7 +1810,7 @@ function openThemePicker(screenEl) {
 
   const mask = showModal(renderBody());
 
-  // 因为内容里有重复 id（preset 按钮 + emoji 按钮），逐步绑事件
+  // 因为弹窗内容会动态同步预设和自定义输入，逐步绑事件
   const bind = () => {
     mask.querySelectorAll('[data-close]').forEach((b) =>
       b.addEventListener('click', () => closeModal()),
@@ -1860,21 +1831,6 @@ function openThemePicker(screenEl) {
         // 同步自定义区域的输入
         mask.querySelector('#th-title').value = p.title;
         mask.querySelector('#th-desc').value = p.desc;
-        mask.querySelectorAll('#th-emoji-grid button').forEach((x) =>
-          x.classList.toggle('is-active', x.dataset.emoji === p.emoji),
-        );
-      });
-    });
-
-    mask.querySelectorAll('#th-emoji-grid button').forEach((b) => {
-      b.addEventListener('click', () => {
-        haptic('light');
-        working.emoji = b.dataset.emoji;
-        mode = 'custom';
-        mask.querySelectorAll('#th-emoji-grid button').forEach((x) =>
-          x.classList.toggle('is-active', x === b),
-        );
-        mask.querySelectorAll('[data-preset]').forEach((x) => x.classList.remove('is-active'));
       });
     });
 
@@ -1905,7 +1861,7 @@ function openThemePicker(screenEl) {
 }
 
 function openCustomEditor(screenEl) {
-  const defaultRate = store.profile.hourlyRate || 50;
+  const defaultRate = currentHourlyRate();
   const mask = showModal(`
     <div class="modal-header">
       <button class="modal-close" data-close>×</button>
@@ -1919,11 +1875,21 @@ function openCustomEditor(screenEl) {
           <input id="ci-label" type="text" maxlength="20" placeholder="例如：临时项目、跑腿费" value="临时项目"/>
         </div>
         <div class="field inline">
-          <label>时长</label>
+          <label>数量</label>
           <input id="ci-hours" type="number" min="0" step="0.5" value="1"/>
         </div>
         <div class="field inline">
-          <label>时薪</label>
+          <label>单位</label>
+          <select id="ci-unit">
+            <option value="小时">小时</option>
+            <option value="份">份</option>
+            <option value="次">次</option>
+            <option value="天">天</option>
+            <option value="公里">公里</option>
+          </select>
+        </div>
+        <div class="field inline">
+          <label>单价</label>
           <input id="ci-rate" type="number" min="0" step="0.01" value="${defaultRate}"/>
         </div>
         <div class="field inline">
@@ -1950,14 +1916,16 @@ function openCustomEditor(screenEl) {
   mask.querySelector('#ci-save').addEventListener('click', () => {
     const label = mask.querySelector('#ci-label').value.trim() || '临时项目';
     const hours = parseFloat(mask.querySelector('#ci-hours').value) || 0;
+    const unit = mask.querySelector('#ci-unit').value || '小时';
     const rate = parseFloat(mask.querySelector('#ci-rate').value) || 0;
-    if (hours <= 0 || rate <= 0) return showToast('时长和单价必须大于 0');
+    if (hours <= 0 || rate <= 0) return showToast('数量和单价必须大于 0');
     const d = getDraft();
     d.customItems.push({
       id: uid(),
       label,
       hours,
       amount: parseFloat((hours * rate).toFixed(2)),
+      unit,
       qty: 1,
     });
     haptic('medium');
@@ -1968,12 +1936,12 @@ function openCustomEditor(screenEl) {
 function buildBillFromDraft() {
   const d = getDraft();
   const items = [];
-  for (const p of store.plans) {
+  for (const p of builtInPlans()) {
     const qty = d.items[p.id] || 0;
-    if (qty > 0) items.push({ label: p.label, icon: p.icon, hours: p.hours, amount: p.amount, qty });
+    if (qty > 0) items.push({ label: p.label, icon: p.icon, hours: p.hours, amount: p.amount, unit: p.unit, qty });
   }
   for (const c of d.customItems) {
-    items.push({ label: c.label, icon: '🧮', hours: c.hours, amount: c.amount, qty: c.qty });
+    items.push({ label: c.label, icon: '🧮', hours: c.hours, amount: c.amount, unit: c.unit, qty: c.qty });
   }
   const total = items.reduce((s, it) => s + it.amount * it.qty, 0);
   return {
@@ -2046,7 +2014,7 @@ function renderLocalBill(el, billId) {
               <div class="emoji">${esc(it.icon || '💼')}</div>
               <div>
                 <div class="name">${esc(it.label)}</div>
-                <div class="meta">${it.hours}h × ¥${formatMoney(it.amount)} × ${it.qty}</div>
+                <div class="meta">${billItemMetaText(it)}</div>
               </div>
               <div class="sub tabular">¥${formatMoney(it.amount * it.qty)}</div>
             </div>
@@ -2079,17 +2047,6 @@ function renderLocalBill(el, billId) {
       </p>
     </div>
 
-    <div class="bottom-bar with-summary">
-      <div class="bottom-summary">
-        <span class="label">状态</span>
-        <span><span class="badge ${bill.status}">${bill.status === 'paid' ? '已收款' : '未收款'}</span></span>
-      </div>
-      ${
-        bill.status === 'pending'
-          ? `<button class="btn btn-primary btn-block" id="btn-mark">标记为已收款</button>`
-          : `<button class="btn btn-secondary btn-block" id="btn-unmark">撤销已收款</button>`
-      }
-    </div>
   `;
 
   bindBackBtn(el);
@@ -2102,25 +2059,6 @@ function renderLocalBill(el, billId) {
     }
     openBillImageSheet(bill, profile);
   });
-
-  const m = $('#btn-mark', el);
-  if (m) {
-    m.addEventListener('click', () => {
-      bill.status = 'paid';
-      bill.paidAt = Date.now();
-      persist();
-      showSuccess('已标记为已收款', '可以在「账单历史」回顾这笔记录。', () => renderLocalBill(el, billId));
-    });
-  }
-  const um = $('#btn-unmark', el);
-  if (um) {
-    um.addEventListener('click', () => {
-      bill.status = 'pending';
-      delete bill.paidAt;
-      persist();
-      renderLocalBill(el, billId);
-    });
-  }
 }
 
 // =====================================================================
@@ -2226,7 +2164,7 @@ function renderPay(el, encoded) {
                 <div class="emoji">${esc(it.icon || '💼')}</div>
                 <div>
                   <div class="name">${esc(it.label)}</div>
-                  <div class="meta">${it.hours}h × ¥${formatMoney(it.amount)} × ${it.qty}</div>
+                  <div class="meta">${billItemMetaText(it)}</div>
                 </div>
                 <div class="sub tabular">¥${formatMoney(it.amount * it.qty)}</div>
               </div>
@@ -2295,13 +2233,13 @@ function openBillImageSheet(bill, profile) {
   const inWeChat = isWeChat();
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-  // 在移动端 / 微信里，主路径就是"长按图片保存"；
-  // 在桌面端，给"下载到电脑"按钮。
+  // 移动端/微信里无法可靠地一键写入相册，主路径就是长按图片保存；
+  // 桌面端保留下载按钮。
   const tipText = inWeChat
-    ? '<strong>长按上方图片 → 保存到相册</strong><br/>然后在微信里发给对方，对方长按图片即可识别二维码付款。'
+    ? '<strong>长按保存到本地并转发</strong><br/>对方长按图片即可识别二维码付款。'
     : isMobile
-      ? '<strong>长按上方图片 → 保存到相册</strong><br/>然后在微信里发给对方，对方长按图片即可识别二维码付款。'
-      : '<strong>右键图片 → 图片另存为，或点下方按钮下载。</strong><br/>把图片发到微信群/聊天里，对方长按图片即可扫码付款。';
+      ? '<strong>长按保存到本地并转发</strong><br/>对方长按图片即可识别二维码付款。'
+      : '<strong>点下方按钮保存图片，或右键图片另存为。</strong><br/>把图片发到微信群/聊天里，对方长按图片即可扫码付款。';
 
   const mask = showModal(`
     <div class="modal-header">
@@ -2321,7 +2259,7 @@ function openBillImageSheet(bill, profile) {
     </div>
     <div class="modal-footer" id="bi-footer" hidden>
       <button class="btn btn-primary btn-block" id="bi-download">
-        ${isMobile ? '在新窗口打开（再长按保存）' : '下载图片到本地'}
+        保存图片
       </button>
     </div>
   `);
@@ -2353,7 +2291,7 @@ function openBillImageSheet(bill, profile) {
       loading.hidden = true;
       preview.hidden = false;
       tip.hidden = false;
-      footer.hidden = false;
+      footer.hidden = isMobile;
 
       blobURL = URL.createObjectURL(blob);
       const theme = billTheme(bill);
@@ -2362,13 +2300,8 @@ function openBillImageSheet(bill, profile) {
       mask.querySelector('#bi-download').addEventListener('click', async () => {
         haptic('light');
 
-        // 移动端 / 微信内：a.download 不一定生效，直接新窗口打开图片，用户长按保存
-        if (isMobile) {
-          window.open(blobURL, '_blank');
-          return;
-        }
-
-        // 桌面端：用 blob URL + 清理过的文件名触发下载
+        // 桌面端：用 blob URL + 清理过的文件名触发下载。
+        // 移动端隐藏按钮，统一提示用户长按保存。
         const a = document.createElement('a');
         a.href = blobURL;
         a.download = fileName;
