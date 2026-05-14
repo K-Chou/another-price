@@ -703,16 +703,14 @@ const DEFAULT_PROFILE = {
 };
 
 const DEFAULT_PLANS = [
+  { id: uid(), icon: '🍔', label: 'KFC 疯狂星期四 v 我 50', hours: 1, amount: 50 },
   { id: uid(), icon: '💼', label: '工作日加班 1 小时', hours: 1, amount: 50 },
-  { id: uid(), icon: '🌙', label: '工作日加班 2 小时', hours: 2, amount: 100 },
-  { id: uid(), icon: '🎉', label: '周末加班半天', hours: 4, amount: 300 },
-  { id: uid(), icon: '🚨', label: '法定节假日 1 天', hours: 8, amount: 1000 },
 ];
 
 const ICON_CHOICES = [
   '💼', '🌙', '🎉', '🚨', '☕', '🍱',
-  '🛠️', '💡', '🏃', '⏰', '💰', '🔥',
-  '📊', '🖥️', '✏️', '🧠', '🌟', '⚡',
+  '🍔', '🛠️', '💡', '🏃', '⏰', '💰',
+  '🔥', '📊', '🖥️', '✏️', '🧠', '⚡',
 ];
 
 // 主题：发起人为每张账单挑一个主题（emoji + 标题 + 描述）
