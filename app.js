@@ -1237,7 +1237,7 @@ function renderHome(el) {
               </svg>
             </div>
           </div>
-          <div class="middle"><div class="title">创建账单</div><div class="subtitle">勾选价目，生成分享链接</div></div>
+          <div class="middle"><div class="title">创建账单</div><div class="subtitle">勾选价目，确认创建账单</div></div>
           <div class="trailing">${ChevronRight()}</div>
         </button>
         <button class="row" data-go="/history">
@@ -1709,7 +1709,7 @@ function renderCreate(el) {
         <span class="label">合计</span>
         <span class="total tabular"><small>¥</small>${formatMoney(total)}</span>
       </div>
-      <button class="btn btn-primary btn-block" id="btn-generate" ${total <= 0 ? 'disabled' : ''}>生成分享链接</button>
+      <button class="btn btn-primary btn-block" id="btn-generate" ${total <= 0 ? 'disabled' : ''}>确认创建</button>
     </div>
   `;
 
