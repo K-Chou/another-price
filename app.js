@@ -196,6 +196,11 @@ function formatMoney(n) {
   return n.toFixed(2);
 }
 
+function formatDateShort(ts) {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
 function formatDateTime(ts) {
   const d = new Date(ts);
   const pad = (n) => String(n).padStart(2, '0');
@@ -467,7 +472,7 @@ async function generateBillImage(bill, profile) {
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#8E8E93';
   ctx.font = '400 24px -apple-system, "PingFang SC", system-ui';
-  ctx.fillText('我的价目', padX, y + 30);
+  ctx.fillText('账单明细', padX, y + 30);
   y += sectionH;
 
   ctx.fillStyle = '#FFFFFF';
@@ -665,11 +670,12 @@ const DEFAULT_PROFILE = {
   alipayQR: '',
 };
 
+// rateMultiplier: 按劳动法倍数计算（1.5x / 2x / 3x），amount 在 builtInPlans() 里动态算
 const DEFAULT_PLANS = [
-  { id: 'builtin-kfc-v50', icon: '🍔', label: 'v我50', hours: 1, amount: 50, rateBased: true, unit: '份' },
-  { id: 'builtin-weekday-ot-1h', icon: '💼', label: '工作日加班 1 小时', hours: 1, amount: 50, rateBased: true },
-  { id: 'builtin-weekend-ot-1h', icon: '🌙', label: '周末加班 1 小时', hours: 1, amount: 50, rateBased: true },
-  { id: 'builtin-holiday-ot-1h', icon: '🚨', label: '节假日加班 1 小时', hours: 1, amount: 50, rateBased: true },
+  { id: 'builtin-kfc-v50',        icon: '🍔', label: 'v我50',           hours: 1, amount: 50,  unit: '份'  },
+  { id: 'builtin-weekday-ot-1h',  icon: '💼', label: '工作日加班 1 小时', hours: 1, rateMultiplier: 1.5, unit: '小时' },
+  { id: 'builtin-weekend-ot-1h',  icon: '🌙', label: '周末加班 1 小时',   hours: 1, rateMultiplier: 2,   unit: '小时' },
+  { id: 'builtin-holiday-ot-1h',  icon: '🚨', label: '节假日加班 1 小时', hours: 1, rateMultiplier: 3,   unit: '小时' },
 ];
 
 const ICON_CHOICES = [
@@ -721,7 +727,6 @@ function loadStore() {
       const data = JSON.parse(raw);
       return {
         profile: { ...DEFAULT_PROFILE, ...(data.profile || {}) },
-        plans: Array.isArray(data.plans) ? data.plans : DEFAULT_PLANS.slice(),
         bills: Array.isArray(data.bills) ? data.bills : [],
         lastTheme: data.lastTheme ? { ...DEFAULT_THEME, ...data.lastTheme } : { ...DEFAULT_THEME },
       };
@@ -731,7 +736,6 @@ function loadStore() {
   }
   return {
     profile: { ...DEFAULT_PROFILE },
-    plans: DEFAULT_PLANS.slice(),
     bills: [],
     lastTheme: { ...DEFAULT_THEME },
   };
@@ -753,26 +757,6 @@ function saveStore(store) {
 
 let store = loadStore();
 
-// 一次性迁移：若老用户的价目表里没有 KFC 那条，软插到最前
-// 用一个 flag 防止用户主动删了之后又被自动加回（尊重用户选择）
-(function migrateAddKfcOnce() {
-  const FLAG = 'aprice_migrated_kfc_v1';
-  if (localStorage.getItem(FLAG)) return;
-  try {
-    const hasKfc = store.plans.some(
-      (p) => typeof p.label === 'string' && /KFC|疯狂星期四|v\s*我\s*50/i.test(p.label),
-    );
-    if (!hasKfc) {
-      store.plans = [
-        { id: uid(), icon: '🍔', label: 'v我50', hours: 1, amount: 50 },
-        ...store.plans,
-      ];
-      saveStore(store);
-    }
-    localStorage.setItem(FLAG, '1');
-  } catch (_) {}
-})();
-
 const persist = () => saveStore(store);
 
 function currentHourlyRate() {
@@ -784,25 +768,30 @@ function builtInPlans() {
   const rate = currentHourlyRate();
   return DEFAULT_PLANS.map((p) => ({
     ...p,
-    amount: p.rateBased ? parseFloat((rate * p.hours).toFixed(2)) : p.amount,
+    amount: p.rateMultiplier ? parseFloat((rate * p.rateMultiplier).toFixed(2)) : p.amount,
   }));
 }
 
 function planDurationText(plan) {
-  return plan.unit ? `${plan.hours}${plan.unit}` : `${plan.hours} 小时`;
+  return `${plan.hours}${plan.unit || '小时'}`;
 }
 
+// 在创建账单列表里展示的小字（单价）
 function planMetaText(plan) {
-  return plan.unit ? `${planDurationText(plan)} · ¥${formatMoney(plan.amount)}` : `${plan.hours}h · ¥${formatMoney(plan.amount)}/次`;
+  const unit = plan.unit || '小时';
+  return `${plan.hours}${unit} · ¥${formatMoney(plan.amount)}/${unit}`;
 }
 
+// 首页价目列表右侧的单价标注
 function planUnitPriceText(plan) {
-  return plan.unit ? `${formatMoney(plan.amount)}/${plan.unit}` : `${formatMoney(plan.amount / Math.max(plan.hours, 0.001))}/小时`;
+  const unit = plan.unit || '小时';
+  return `${formatMoney(plan.amount)}/${unit}`;
 }
 
+// 账单明细行的小字（¥单价 × 数量单位）
 function billItemMetaText(item) {
-  const unitText = item.unit ? `${item.hours}${item.unit}` : `${item.hours}h`;
-  return `${unitText} × ¥${formatMoney(item.amount)} × ${item.qty}`;
+  const unit = item.unit || '小时';
+  return `¥${formatMoney(item.amount)} × ${item.qty}${unit}`;
 }
 
 // =====================================================================
@@ -1179,7 +1168,7 @@ function renderHome(el) {
       </div>
 
       ${needSetup
-        ? `<div class="env-banner">第一次使用，请先上传<strong>微信赞赏码</strong>，否则对方扫不到码无法付款。</div>`
+        ? `<div class="env-banner env-banner--info">💡 第一次使用，请先上传<strong>微信赞赏码</strong>，对方才能扫码付款。</div>`
         : ''
       }
 
@@ -1398,181 +1387,6 @@ function renderSettings(el) {
 // 视图：价目表管理
 // =====================================================================
 
-function renderPricing(el) {
-  el.innerHTML = `
-    ${NavBar({
-      title: '价目表',
-      right: `<button class="nav-action" id="btn-add-plan">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      </button>`,
-    })}
-
-    <div class="large-title">
-      价目表
-      <div class="large-title-subtitle">为不同项目定义单次价格。</div>
-    </div>
-
-    <div class="screen-content">
-      <div class="group">
-        ${
-          store.plans.length === 0
-            ? `<div class="empty"><div class="icon">📋</div>暂无价目，点击右上角「＋」添加</div>`
-            : store.plans
-                .map(
-                  (p) => `
-              <div class="plan-row">
-                <div class="plan-icon-circle">${esc(p.icon || '💼')}</div>
-                <div class="plan-body">
-                  <div class="name">${esc(p.label)}</div>
-                  <div class="meta">${p.hours} 小时 · ¥${formatMoney(p.amount)}</div>
-                </div>
-                <div class="row-action-btns">
-                  <button data-edit="${p.id}" aria-label="编辑">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </button>
-                  <button class="danger" data-del="${p.id}" aria-label="删除">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
-                  </button>
-                </div>
-              </div>
-            `,
-                )
-                .join('')
-        }
-      </div>
-    </div>
-  `;
-
-  bindBackBtn(el);
-  $('#btn-add-plan', el).addEventListener('click', () => {
-    haptic('light');
-    openPlanEditor();
-  });
-  $$('[data-edit]', el).forEach((b) =>
-    b.addEventListener('click', () => {
-      haptic('light');
-      openPlanEditor(b.dataset.edit);
-    }),
-  );
-  $$('[data-del]', el).forEach((b) =>
-    b.addEventListener('click', () => {
-      haptic('medium');
-      openConfirmDelete(b.dataset.del);
-    }),
-  );
-}
-
-function openConfirmDelete(id) {
-  const plan = store.plans.find((p) => p.id === id);
-  if (!plan) return;
-  const mask = showModal(
-    `
-    <div class="modal-header">
-      <div></div>
-      <h2>删除价目</h2>
-      <button class="modal-close" data-close>×</button>
-    </div>
-    <p style="margin:0 0 18px;color:var(--label-secondary);font-size:14px;line-height:1.5;text-align:center">
-      确定要删除「${esc(plan.label)}」吗？此操作不可撤销。
-    </p>
-    <button class="btn btn-danger btn-block" id="confirm-del">删除</button>
-    <button class="btn btn-ghost btn-block" data-close style="margin-top:8px">取消</button>
-  `,
-    { bottom: false },
-  );
-  mask.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeModal()));
-  mask.querySelector('#confirm-del').addEventListener('click', () => {
-    store.plans = store.plans.filter((p) => p.id !== id);
-    persist();
-    closeModal(() => PageStack.reRenderCurrent());
-    showToast('已删除');
-  });
-}
-
-function openPlanEditor(id) {
-  const editing = id ? store.plans.find((p) => p.id === id) : null;
-  const draft = editing
-    ? { ...editing }
-    : { id: uid(), icon: '💼', label: '', hours: 1, amount: 50 };
-
-  const mask = showModal(`
-    <div class="modal-header">
-      <button class="modal-close" data-close>×</button>
-      <h2>${editing ? '编辑价目' : '新增价目'}</h2>
-      <span></span>
-    </div>
-
-    <div class="modal-scroll">
-      <div class="section-header"><span>图标</span></div>
-      <div class="field-group">
-        <div class="icon-grid" id="icon-picker">
-          ${ICON_CHOICES.map(
-            (ic) => `<button data-icon="${ic}" class="${ic === draft.icon ? 'is-active' : ''}">${ic}</button>`,
-          ).join('')}
-        </div>
-      </div>
-
-      <div class="section-header"><span>详情</span></div>
-      <div class="field-group">
-        <div class="field inline">
-          <label>名称</label>
-          <input id="ed-label" type="text" maxlength="20" placeholder="例如：工作日加班 1 小时" value="${esc(draft.label)}"/>
-        </div>
-        <div class="field inline">
-          <label>时长</label>
-          <input id="ed-hours" type="number" min="0" step="0.5" value="${draft.hours}"/>
-        </div>
-        <div class="field inline">
-          <label>金额</label>
-          <input id="ed-amount" type="number" min="0" step="0.01" value="${draft.amount}"/>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-footer">
-      <button class="btn btn-primary btn-block" id="ed-save">${editing ? '保存' : '新增'}</button>
-    </div>
-  `);
-
-  mask.querySelectorAll('#icon-picker button').forEach((b) => {
-    b.addEventListener('click', () => {
-      haptic('light');
-      draft.icon = b.dataset.icon;
-      mask.querySelectorAll('#icon-picker button').forEach((x) => x.classList.remove('is-active'));
-      b.classList.add('is-active');
-    });
-  });
-
-  mask.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeModal()));
-
-  mask.querySelector('#ed-save').addEventListener('click', () => {
-    const label = mask.querySelector('#ed-label').value.trim();
-    const hours = parseFloat(mask.querySelector('#ed-hours').value) || 0;
-    const amount = parseFloat(mask.querySelector('#ed-amount').value) || 0;
-    if (!label) return showToast('请填写名称');
-    if (amount <= 0) return showToast('金额必须大于 0');
-
-    draft.label = label;
-    draft.hours = hours;
-    draft.amount = amount;
-
-    if (editing) {
-      // 编辑：原位更新，并提到列表最前（让首页前 4 条预览能立刻看见改动）
-      store.plans = [draft, ...store.plans.filter((p) => p.id !== editing.id)];
-    } else {
-      // 新增：插入到列表最前，让首页前 4 条预览能立刻看见
-      store.plans.unshift(draft);
-    }
-    persist();
-    haptic('medium');
-    closeModal(() => PageStack.reRenderCurrent());
-    showToast(editing ? '已更新' : '已新增');
-  });
-}
-
 // =====================================================================
 // 视图：创建账单
 // =====================================================================
@@ -1636,7 +1450,7 @@ function renderCreate(el) {
                         <span class="count">${qty}</span>
                         <button data-act="inc" data-plan="${p.id}">＋</button>
                       </div>`
-                    : `<div class="plan-price"><div class="amount tabular">¥${formatMoney(p.amount)}</div><div class="unit">点击添加</div></div>`
+                    : `<div class="plan-price-idle"><div class="idle-amount tabular">¥${formatMoney(p.amount)}</div><div class="idle-unit">+ 添加</div></div>`
                 }
               </div>
             `;
@@ -1997,10 +1811,11 @@ function renderLocalBill(el, billId) {
     <div class="large-title">账单详情</div>
 
     <div class="screen-content" style="padding-bottom:120px">
-      <div class="bill-hero">
+      <div class="bill-hero ${bill.status === 'paid' ? 'is-paid' : ''}">
         <div class="theme-badge"><span class="emoji">${esc(theme.emoji)}</span><span>${esc(theme.title)}</span></div>
-        <div class="label">应收</div>
+        <div class="label">${bill.status === 'paid' ? '已收款' : '应收'}</div>
         <div class="amount tabular"><small>¥</small>${formatMoney(bill.total)}</div>
+        ${bill.status === 'paid' ? `<div class="bill-hero-paid-badge">✓ 已收款</div>` : ''}
         ${bill.note ? `<div class="note">${esc(bill.note)}</div>` : ''}
       </div>
 
@@ -2086,7 +1901,7 @@ function renderHistory(el) {
               <div class="history-emoji">${esc(t.emoji)}</div>
               <div class="history-main">
                 <div class="title">${esc(t.title)}</div>
-                <div class="meta">${formatDateTime(b.createdAt)} · ${b.items.length} 项${b.note ? ' · ' + esc(b.note) : ''}</div>
+                <div class="meta">${formatDateShort(b.createdAt)} · ${b.items.length} 项${b.note ? ' · ' + esc(b.note) : ''}</div>
               </div>
               <div class="right">
                 <div class="amount tabular">¥${formatMoney(b.total)}</div>
@@ -2209,8 +2024,9 @@ function renderPay(el, encoded) {
         payMode
           ? `<div class="bottom-bar">
               <button class="btn btn-primary btn-block" id="btn-paid">我已支付 ¥${formatMoney(bill.total)}</button>
+              <p class="pay-brand-hint">账单由「<a href="${esc(appHomeURL())}" target="_blank" rel="noopener">另外的价钱</a>」生成</p>
             </div>`
-          : ''
+          : `<div class="pay-brand-footer">账单由「<a href="${esc(appHomeURL())}" target="_blank" rel="noopener">另外的价钱</a>」生成</div>`
       }
     `;
 
@@ -2405,8 +2221,10 @@ function renderReceipt(el, encoded) {
   const matched = !!bill;
   const payerNote = r.n || '';
   const payMethod = r.m === 'alipay' ? '支付宝' : '微信';
-  const when = new Date(r.at);
-  const whenText = `${when.getMonth() + 1}月${when.getDate()}日 ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`;
+  const when = r.at ? new Date(r.at) : null;
+  const whenText = when && !isNaN(when.getTime())
+    ? `${when.getMonth() + 1}月${when.getDate()}日 ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`
+    : '—';
 
   const alreadyPaid = matched && bill.status === 'paid';
 
@@ -2526,7 +2344,6 @@ function renderInto(el, path, params) {
   el.scrollTop = 0;
   if (path === '/home') return renderHome(el);
   if (path === '/settings') return renderSettings(el);
-  if (path === '/pricing') return renderPricing(el);
   if (path === '/create') return renderCreate(el);
   if (path === '/history') return renderHistory(el);
   if (path.startsWith('/bill/')) return renderLocalBill(el, path.split('/')[2]);
